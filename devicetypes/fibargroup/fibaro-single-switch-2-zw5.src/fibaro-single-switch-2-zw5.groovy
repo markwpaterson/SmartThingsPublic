@@ -45,15 +45,6 @@ metadata {
     }
 
     preferences {
-        input (
-                title: "Fibaro Single Switch 2 ZW5 manual",
-                description: "Tap to view the manual.",
-                image: "http://manuals.fibaro.com/wp-content/uploads/2016/08/switch2_icon.jpg",
-                url: "http://manuals.fibaro.com/content/manuals/en/FGS-2x3/FGS-2x3-EN-T-v1.2.pdf",
-                type: "href",
-                element: "href"
-        )
-
         parameterMap().each {
             input (
                     title: "${it.num}. ${it.title}",
@@ -307,6 +298,18 @@ def zwaveEvent(physicalgraph.zwave.commands.crc16encapv1.Crc16Encap cmd) {
         zwaveEvent(encapsulatedCommand)
     } else {
         logging("Unable to extract CRC16 command from $cmd","warn")
+    }
+}
+
+def zwaveEvent(physicalgraph.zwave.commands.multichannelv3.MultiChannelCmdEncap cmd) {
+    def encapsulatedCommand = cmd.encapsulatedCommand(cmdVersions())
+    if (encapsulatedCommand) {
+        logging("${device.displayName} - Parsed MultiChannelCmdEncap ${encapsulatedCommand}")
+        // this device sometimes sends events encapsulated.
+        if (cmd.sourceEndPoint as Integer == 0) zwaveEvent(encapsulatedCommand)
+        else log.warn "Received a multichannel event from an unsupported channel"
+    } else {
+        log.warn "Unable to extract MultiChannel command from $cmd"
     }
 }
 

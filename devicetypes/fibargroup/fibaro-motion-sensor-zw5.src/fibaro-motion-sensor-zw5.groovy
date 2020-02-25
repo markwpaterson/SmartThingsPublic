@@ -81,16 +81,6 @@ metadata {
 		details(["FGMS", "battery", "temperature", "illuminance", "motionTile", "multiStatus"])
 	}
 	preferences {
-
-		input(
-			title: "Fibaro Motion Sensor ZW5 manual",
-			description: "Tap to view the manual.",
-			image: "http://manuals.fibaro.com/wp-content/uploads/2017/02/ms_icon.png",
-			url: "http://manuals.fibaro.com/content/manuals/en/FGMS-001/FGMS-001-EN-T-v2.1.pdf",
-			type: "href",
-			element: "href"
-		)
-
 		parameterMap().findAll { (it.num as Integer) != 54 }.each {
 			input(
 				title: "${it.num}. ${it.title}",
@@ -272,10 +262,6 @@ def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd) {
 def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd) {
 	logging("${device.displayName} woke up", "debug")
 	def cmds = []
-	if (state.wakeUpInterval?.state == "notSynced" && state.wakeUpInterval?.value != null) {
-		cmds << zwave.wakeUpV2.wakeUpIntervalSet(seconds: state.wakeUpInterval.value as Integer, nodeid: zwaveHubNodeId)
-		state.wakeUpInterval.state = "synced"
-	}
 	def event = createEvent(descriptionText: "${device.displayName} woke up", displayed: false)
 	cmds << encap(zwave.batteryV1.batteryGet())
 	cmds << "delay 500"

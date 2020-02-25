@@ -43,15 +43,6 @@ metadata {
 	}
 
 	preferences {
-		input (
-				title: "Fibaro Double Switch 2 ZW5 manual",
-				description: "Tap to view the manual.",
-				image: "http://manuals.fibaro.com/wp-content/uploads/2016/08/switch2_icon.jpg",
-				url: "http://manuals.fibaro.com/content/manuals/en/FGS-2x3/FGS-2x3-EN-T-v1.2.pdf",
-				type: "href",
-				element: "href"
-		)
-
 		parameterMap().each {
 			input (
 					title: "${it.num}. ${it.title}",
@@ -265,8 +256,10 @@ private createChildDevices() {
 		addChildDevice(
 			"Fibaro Double Switch 2 - USB",
 			"${device.deviceNetworkId}-2",
-			null,
-			[completedSetup: true, label: "${device.displayName} (CH2)", isComponent: false, componentName: "ch2", componentLabel: "Channel 2"]
+			device.hubId,
+			[completedSetup: true,
+			 label: "${device.displayName} (CH2)",
+			 isComponent: false]
 		)
 	} catch (Exception e) {
 		logging("${device.displayName} - error attempting to create child device: "+e, "debug")

@@ -143,7 +143,7 @@ def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd, sourceE
 	result
 }
 
-def zwaveEvent(physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeReport cmd) {
+def zwaveEvent(physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeReport cmd, sourceEndPoint = null) {
 	def mode
 	switch (cmd.mode) {
 		case 1:
@@ -160,22 +160,43 @@ def zwaveEvent(physicalgraph.zwave.commands.thermostatmodev2.ThermostatModeRepor
 	createEvent(name: "thermostatMode", value: mode, data: [supportedThermostatModes: state.supportedModes])
 }
 
-def zwaveEvent(physicalgraph.zwave.commands.thermostatsetpointv2.ThermostatSetpointReport cmd) {
+def zwaveEvent(physicalgraph.zwave.commands.thermostatsetpointv2.ThermostatSetpointReport cmd, sourceEndPoint = null) {
 	createEvent(name: "heatingSetpoint", value: convertTemperatureIfNeeded(cmd.scaledValue, 'C', cmd.precision), unit: temperatureScale)
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.sensormultilevelv5.SensorMultilevelReport cmd, sourceEndPoint = null) {
 	def map = [name: "temperature", value: convertTemperatureIfNeeded(cmd.scaledSensorValue, 'C', cmd.precision), unit: temperatureScale]
-	sendEventToChild(map)
-	createEvent(map)
+	if (map.value != "-100.0") {
+		if (state.isTemperatureReportAbleToChangeStatus) {
+			changeTemperatureSensorStatus("online")
+			sendEventToChild(map)
+		}
+		createEvent(map)
+	} else {
+		changeTemperatureSensorStatus("offline")
+		response(secureEncap(zwave.configurationV2.configurationGet(parameterNumber: 3)))
+	}
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.configurationv2.ConfigurationReport cmd) {
-	if (cmd.parameterNumber == 3 && cmd.scaledConfigurationValue == 1) {
-		if(!childDevices) {
-			addChild()
+	if (cmd.parameterNumber == 3) {
+		if (cmd.scaledConfigurationValue == 1) {
+			if (!childDevices) {
+				addChild()
+			} else {
+				refreshChild()
+			}
+			state.isTemperatureReportAbleToChangeStatus = true
+			changeTemperatureSensorStatus("online")
+		} else if (cmd.scaledConfigurationValue == 0 && childDevices) {
+			state.isTemperatureReportAbleToChangeStatus = false
+			changeTemperatureSensorStatus("offline")
 		}
 	}
+}
+
+def zwaveEvent(physicalgraph.zwave.commands.notificationv3.NotificationReport cmd, sourceEndPoint = null) {
+	log.debug "Notification: ${cmd}"
 }
 
 def zwaveEvent(physicalgraph.zwave.commands.applicationstatusv1.ApplicationBusy cmd) {
@@ -296,10 +317,15 @@ def switchMode() {
 	}
 }
 
-def sendEventToChild(event) {
+def sendEventToChild(event, forced = false) {
 	String childDni = "${device.deviceNetworkId}:2"
 	def child = childDevices.find { it.deviceNetworkId == childDni }
-	child?.sendEvent(event)
+	if (state.isChildOnline || forced)
+		child?.sendEvent(event)
+}
+
+def configureChild() {
+	sendEventToChild(createEvent(name: "DeviceWatch-Enroll", value: [protocol: "zwave", scheme:"untracked"].encodeAsJson(), displayed: false), true)
 }
 
 private refreshChild() {
@@ -317,9 +343,8 @@ private forcedRefresh() {
 def addChild() {
 	String childDni = "${device.deviceNetworkId}:2"
 	String componentLabel =	 "Fibaro Temperature Sensor"
-	String ch = "ch2"
 
-	addChildDevice("Child Temperature Sensor", childDni, device.hub.id,[completedSetup: true, label: componentLabel, isComponent: false, componentName: ch, componentLabel: componentLabel])
+	addChildDevice("Child Temperature Sensor", childDni, device.hub.id,[completedSetup: true, label: componentLabel, isComponent: false])
 }
 
 private getMaxHeatingSetpointTemperature() {
@@ -328,4 +353,10 @@ private getMaxHeatingSetpointTemperature() {
 
 private getMinHeatingSetpointTemperature() {
 	temperatureScale == 'C' ? 10 : 50
+}
+
+private changeTemperatureSensorStatus(status) {
+	state.isChildOnline = (status == "online")
+	def map = [name: "DeviceWatch-DeviceStatus", value: status]
+	sendEventToChild(map, true)
 }
